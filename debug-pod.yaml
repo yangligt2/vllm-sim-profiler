@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vllm-debug-pod
+  labels:
+    app: vllm-debug
+spec:
+  restartPolicy: Never
+  
+  # --- INIT CONTAINER: Clones the Code ---
+  initContainers:
+  - name: git-cloner
+    image: alpine/git
+    # 1. Clone into the shared volume mount path
+    args: 
+      - clone
+      - --single-branch
+      - --branch=main
+      - https://github.com/yangligt2/vllm-sim-profiler.git
+      - /repo-root/
+    volumeMounts:
+    - name: script-transfer-vol
+      mountPath: /repo-root
+
+  # --- MAIN CONTAINER: The vLLM Environment ---
+  containers:
+  - name: vllm-container
+    image: vllm/vllm-openai:latest
+    command: ["/bin/bash", "-c", "sleep infinity"]
+    
+    # GPU Resources (Required for vLLM to see GPUs)
+    resources:
+      limits:
+        nvidia.com/gpu: 4
+      requests:
+        nvidia.com/gpu: 4
+
+    env:
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: hf-secret
+          key: HF_TOKEN
+
+    volumeMounts:
+    # 1. Mount the scripts cloned by the init container
+    - name: script-transfer-vol
+      mountPath: /workspace/scripts
+      
+    # 2. Mount the PVC to save your profiling results
+    - name: output-storage
+      mountPath: /data
+      
+    # 3. Required for PyTorch/NCCL to prevent crashes
+    - name: dshm
+      mountPath: /dev/shm
+
+  # --- VOLUMES DEFINITION ---
+  volumes:
+  # The bridge between Init Container and Main Container
+  - name: script-transfer-vol
+    emptyDir: {}
+  
+  # The GKE Persistent Disk for saving results
+  - name: output-storage
+    persistentVolumeClaim:
+      claimName: vllm-output-pvc
+      
+  # Shared memory volume
+  - name: dshm
+    emptyDir:
+      medium: Memory
