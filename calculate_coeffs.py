@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
 
-def analyze_profiling(filename="vllm_profiling_data.csv"):
+def analyze_profiling(filename="vllm_profiling_data_3.csv"):
     df = pd.read_csv(filename)
     
     print("--- Analysis Report ---")
